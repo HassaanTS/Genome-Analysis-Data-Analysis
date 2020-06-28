@@ -1,0 +1,115 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+# Initializations
+## 1.1 Required Libraries
+```{r}
+library(ggplot2)
+library(data.table)
+options(warn=-1)
+```
+
+
+## 1.2 Load the Data
+```{r}
+marker <- read.delim("marker.txt")
+growth <- read.delim("growth.txt")
+#gene <- read.delim("gene.txt")
+genotype <- read.delim("genotype.txt")
+#expression <- read.delim("expression.txt")
+  
+setDT( marker )
+setDT(growth )
+#setDT(gene )
+setDT(genotype )
+#setDT(expression )
+```
+
+## Calculating mean growth with each genotype for each marker
+```{r}
+combinedMean <- merge(growth[, .('growth' = rowMeans(.SD,na.rm=TRUE)), by = strain], genotype)
+combinedYPD      <- merge(growth[,c('strain','YPD')], genotype)
+combinedYPD_BPS  <- merge(growth[,c('strain','YPD_BPS')], genotype)
+combinedYPD_Rapa <- merge(growth[,c('strain','YPD_Rapa')], genotype)
+combinedYPE      <- merge(growth[,c('strain','YPE')], genotype)
+combinedYPMalt   <- merge(growth[,c('strain','YPMalt')], genotype)
+
+
+
+
+calcGrowths <- function(combined) {
+  colnames(combined)[2] <- "growth"
+  markers <- vector()
+  LS.growth <- vector()
+  WI.growth <- vector()
+
+  for(i in 1:1000) {
+    markername = toString(marker[i,id])
+    LS <- combined[get(markername)=='Lab strain',mean(growth,na.rm=TRUE),]
+    WI <- combined[get(markername)=='Wild isolate',mean(growth,na.rm=TRUE),]
+    markers <- c(markers, markername)
+    LS.growth <- c(LS.growth, LS)
+    WI.growth <- c(WI.growth, WI)
+  }
+
+  meanGrowths = data.frame(markers, LS.growth, WI.growth)
+  setDT(meanGrowths)
+  meanGrowths <- cbind(meanGrowths,meanGrowths[,3]-meanGrowths[,2])
+  colnames(meanGrowths)[4] <- "growthDiff"
+  meanGrowths
+}
+```
+
+
+
+##Growth differences for all markers w.r.t mediums
+```{r}
+
+m_grth_all <- calcGrowths(combinedMean)
+m_grth_ypd <- calcGrowths(combinedYPD)
+m_grth_ypd_bps <- calcGrowths(combinedYPD_BPS)
+m_grth_ypd_rapa <- calcGrowths(combinedYPD_Rapa)
+m_grth_ype <- calcGrowths(combinedYPE)
+m_grth_yp_malt <- calcGrowths(combinedYPMalt)
+
+meanGrowths = calcGrowths(combinedMean)
+par(mfrow=c(1,1))
+boxplot(meanGrowths[,2:3], main="Gene Growth Comparison for All Mediums")
+
+meanGrowths = calcGrowths(combinedYPD)
+par(mfrow=c(1,1))
+boxplot(meanGrowths[,2:3], main="Gene Growth Comparison for YPD")
+
+meanGrowths = calcGrowths(combinedYPD_BPS)
+par(mfrow=c(1,1))
+boxplot(meanGrowths[,2:3], main="Gene Growth Comparison for YPD_BPS")
+
+meanGrowths = calcGrowths(combinedYPD_Rapa)
+par(mfrow=c(1,1))
+boxplot(meanGrowths[,2:3], main="Gene Growth Comparison for YPD_Rapa")
+
+meanGrowths = calcGrowths(combinedYPE)
+par(mfrow=c(1,1))
+boxplot(meanGrowths[,2:3], main="Gene Growth Comparison for YPE")
+
+meanGrowths = calcGrowths(combinedYPMalt)
+par(mfrow=c(1,1))
+boxplot(meanGrowths[,2:3], main="Gene Growth Comparison for YPMalt")
+
+par(mfrow=c(1,1))
+plot(m_grth_all$growthDiff, type="o", main=" Growth Diff All Mediums", xlab= "marker", ylab="LS< 0 > WI")
+par(mfrow=c(1,1))
+plot(m_grth_ypd$growthDiff, type="o", main=" Growth Diff YPD", xlab= "marker", ylab="LS< 0 > WI")
+par(mfrow=c(1,1))
+plot(m_grth_ypd_bps$growthDiff, type="o", main=" Growth Diff YPD_BPS", xlab= "marker", ylab="LS< 0 > WI")
+par(mfrow=c(1,1))
+plot(m_grth_ypd_rapa$growthDiff, type="o", main=" Growth Diff YPD_Rapa", xlab= "marker", ylab="LS< 0 > WI")
+par(mfrow=c(1,1))
+plot(m_grth_ype$growthDiff, type="o", main=" Growth Diff YPE", xlab= "marker", ylab="LS< 0 > WI")
+par(mfrow=c(1,1))
+plot(m_grth_yp_malt$growthDiff, type="o", main=" Growth Diff YPMalt", xlab= "marker", ylab="LS< 0 > WI")
+
+```

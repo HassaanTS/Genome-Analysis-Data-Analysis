@@ -1,0 +1,200 @@
+---
+title: "R Notebook"
+output:
+  html_document:
+    df_print: paged
+---
+# Initializations
+## 1.1 Required Libraries
+```{r}
+library(ggplot2)
+library(data.table)
+options(warn=-1)
+```
+
+
+## 1.2 Load the Data
+```{r}
+marker <- read.delim("marker.txt")
+growth <- read.delim("growth.txt")
+gene <- read.delim("gene.txt")
+genotype <- read.delim("genotype.txt")
+exp.ression <- read.delim("expression.txt")
+  
+marker_dt <- as.data.table( marker )
+growth_dt <- as.data.table( growth )
+gene_dt <- as.data.table( gene )
+genotype_dt <- as.data.table( genotype )
+expression_dt <- as.data.table( exp.ression )
+```
+
+# 2. Tidy The Data
+
+### Expressions 
+First the expressions data is melted. The strain and environment values on the column names will be values under the columns 'Strain' and 'Medium', repectively.
+```{r}
+exp_melted <- melt(expression_dt, 
+                   id.vars=c(), 
+                   measure.vars = colnames(expression_dt), 
+                   variable.name = "Strain", 
+                   value.name = "Value")
+
+exp_melted[,Medium := Strain]
+exp_melted[,Medium:=gsub(pattern = "\\..*$",replacement = "",x=Medium)]
+exp_melted[,Strain:=gsub(pattern = "^.*\\.",replacement = "",x=Strain)]
+setcolorder(exp_melted, c("Strain", "Medium", "Value"))
+head(exp_melted)
+```
+
+### Genotype
+
+Genotype is melted so that the marker variables will not be in the columns but under the "Marker" column. And the values column is named as "Source", which indicates the source of the corresponding marker.
+
+```{r}
+genotype_melted <- melt(genotype_dt,
+                        id.vars = c("strain"), 
+                        measure.vars = setdiff(colnames(genotype_dt), c("strain")),
+                        variable.name = "Marker", value.name = "Source")
+
+head(genotype_melted)
+```
+
+
+## Experimental graphing and summary extraction
+```{r}
+
+
+
+# boxplot(exp_melted$Value~exp_melted$Medium)
+# 
+# ggplot(exp_melted, aes(exp_melted$Medium, exp_melted$Value) ) +
+#   geom_point()
+
+ggplot(exp_melted,
+  aes(exp_melted$Medium, exp_melted$Value)) +
+  geom_point() + geom_boxplot()
+
+the.med <- unique(exp_melted$Medium) # SUMMARIES OF EACH STRAIN
+the.med
+med_summary <- list()
+for(med in the.med){
+  these <- exp_melted$Medium == med
+  med_summary[[med]] <- summary(exp_melted[these, ])
+}
+str(summary(med_summary))
+#med_summary
+
+# stats <- list()
+# for(iter in 1:a){
+# 
+#   it <- as.matrix(iter)
+#   it
+#   vals <- length(it[, 3])
+# 
+#   for(val in vals){
+#     val
+#     c <- it[val, 3]
+#     d <- strsplit(c, ":")[[1]]
+#     stats[[d[1]]] <- as.double(d[2])
+#   }
+# 
+#   break()
+# }
+# length(stats)
+# names(a)[2]
+
+summ <- unclass(med_summary)
+ypd <- as.matrix(summ$YPD)
+ybs <- as.matrix(summ$YPD_BPS)
+yrp <- as.matrix(summ$YPD_Rapa)
+ype <- as.matrix(summ$YPE)
+ypm <- as.matrix(summ$YPMalt)
+vals <- c("min", "q1", "median", "mean", "q3", "max")
+func <- function(arg.mat){
+  l <- list()
+  for(i in 1:6){
+    c <- arg.mat[i, 3]
+    d <- strsplit(c, ":")[[1]]
+    l[vals[i]] <- as.double(d[2])
+  }
+  #return(c(m, sd)) ignore b/c no labels on outputs
+  #instead return a list.
+  return(l)
+}
+
+ypd <- func(ypd)
+ybs <- func(ybs)
+yrp <- func(yrp)
+ype <- func(ype)
+ypm <- func(ypm)
+ypd
+ybs
+yrp
+ype
+ypm
+
+# imp.stats <- function(arg.list){
+#   l <- list()
+#   l["min"] <- arg.list["min"]
+#   l["q1"] <- arg.list["q1"]
+#   l["median"] <- arg.list["median"]
+#   l["q3"] <- arg.list["q3"]
+#   l["max"] <- arg.list["max"]
+#   return(l)
+# }
+
+# ypd <- imp.stats(func(ypd))
+# ybs <- imp.stats(func(ybs))
+# yrp <- imp.stats(func(yrp))
+# ype <- imp.stats(func(ype))
+# ypm <- imp.stats(func(ypm))
+# data.frame(matrix(ypd))
+#boxplot(,data=df, main="Strains in different media", 
+ #       xlab="Media", ylab="Expression Level in log2")
+
+# st_t <- as.table(strain_summary[["seg_01B"]])
+# a <- table(st_t)
+# names(a)
+
+```
+
+## The Difference in Lab & Wild counts for a given marker and All 
+```{r}
+given_marker <- "mrk_3385"
+mygeno <-  subset( genotype_melted, Marker ==given_marker)
+
+genotype_melted[, ]
+ggplot(mygeno, aes(Source)) + geom_histogram(stat="count") + ggtitle("Counts of Lab and Wild Genes for Given Marker")
+
+count_geno <- genotype_melted[, .N, by=.(Marker, Source)]
+
+ggplot(count_geno, aes(Source, N)) + geom_violin() +ggtitle("Distibution of Lab And Wild Genes For All Markers") + scale_y_continuous("Counts")
+
+```
+
+
+## The Difference in Lab & Wild marker counts for a given chromosome
+```{r}
+given_chrom <- "chr05" ##The given chromosome... in chr05 the difference between wild and lab genes are high compared to other chromosomes.
+sel_markers <- subset(marker_dt ,chrom== given_chrom)# selected markers as data frame to merge
+mygeno <- as.data.table(merge(genotype_melted, sel_markers,by.x= "Marker" , by.y = "id")) ## merge, left join, on column Marker
+ggplot(mygeno, aes(Source)) + geom_histogram(stat="count")
+
+
+#attach(growth)
+#par(mfrow=c(1,5))
+#plot(growth$YPD ~ mygeno$strain, data=growth, main=given_chrom)
+#plot(growth$YPD_BPS ~ mygeno[strain], data=growth, main=given_chrom)
+#plot(growth$YPD_Rapa ~ mygeno[strain], data=growth, main=given_chrom)
+#plot(growth$YPE ~ mygeno[strain], data=growth, main=given_chrom)
+#plot(growth$YPMalt ~ mygeno[strain], data=growth, main=given_chrom)
+#ggplot(growth_dt, aes())
+```
+
+
+## Expression values depending on the medium
+```{r}
+ggplot(exp_melted, aes(Medium,Value) ) + geom_violin()
+
+```
+
